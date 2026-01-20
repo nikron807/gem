@@ -1,6 +1,4 @@
 import os
-import sys
-import traceback
 import logging
 from collections import defaultdict
 from datetime import datetime
@@ -8,20 +6,30 @@ import google.generativeai as genai
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, CallbackQueryHandler, ContextTypes
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # ════════════════════════════════════════════════════════════════
-# RAILWAY VARIABLES (читаешь из Railway Dashboard)
+# ПЕРЕМЕННЫЕ ИЗ RAILWAY DASHBOARD
 # ════════════════════════════════════════════════════════════════
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-if not TELEGRAM_TOKEN or not GEMINI_API_KEY:
-    print("❌ ОШИБКА: TELEGRAM_TOKEN или GEMINI_API_KEY не установлены в Railway!")
-    sys.exit(1)
+logger.info("=" * 60)
+logger.info("🔥 ИНИЦИАЛИЗАЦИЯ ВЫСШЕГО ИНТЕЛЛЕКТА")
+logger.info("=" * 60)
+logger.info(f"Telegram Token: {'✅' if TELEGRAM_TOKEN else '❌ ОТСУТСТВУЕТ'}")
+logger.info(f"Gemini API Key: {'✅' if GEMINI_API_KEY else '❌ ОТСУТСТВУЕТ'}")
 
-genai.configure(api_key=GEMINI_API_KEY)
+if GEMINI_API_KEY:
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        logger.info("✅ Gemini API сконфигурирован")
+    except Exception as e:
+        logger.error(f"⚠️ Ошибка Gemini: {e}")
 
 YOUTUBE_LINK = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
@@ -35,6 +43,8 @@ USERS = {}
 
 
 class UserManager:
+    """Управление пользователями и подписками"""
+    
     def __init__(self):
         self.users = USERS
     
@@ -55,10 +65,12 @@ class UserManager:
             "responses_used": 0,
             "subscription_date": datetime.now().isoformat()
         }
+        logger.info(f"✅ Пользователь {user_id}: подписка {sub_type}")
     
     def add_response(self, user_id):
         user_id = str(user_id)
-        self.users[user_id]["responses_used"] += 1
+        if user_id in self.users:
+            self.users[user_id]["responses_used"] += 1
     
     def can_use_response(self, user_id):
         user_id = str(user_id)
@@ -78,28 +90,37 @@ class UserManager:
 
 
 class RAG:
+    """RAG система с Gemini API"""
+    
     def __init__(self):
         self.conversation_history = defaultdict(list)
         self.max_history = 25
         self.user_manager = UserManager()
 
     def get_history_context(self, user_id):
+        """Получить контекст из истории"""
         if not self.conversation_history[user_id]:
             return ""
         text = "КОНТЕКСТ ДИАЛОГА:\n"
         for msg in self.conversation_history[user_id][-5:]:
             if msg["role"] == "user":
-                text += f"▸ {msg['text'][:100]}\n"
+                text += f"▸ Вопрос: {msg['text'][:80]}\n"
             else:
-                text += f"▸ {msg['text'][:100]}...\n"
+                text += f"▸ Ответ: {msg['text'][:80]}...\n"
         return text
 
     def add_to_history(self, user_id, role, text):
+        """Добавить в историю"""
         self.conversation_history[user_id].append({"role": role, "text": text})
         if len(self.conversation_history[user_id]) > self.max_history:
             self.conversation_history[user_id] = self.conversation_history[user_id][-self.max_history:]
 
     def answer_gemini(self, question, user_id):
+        """Получить ответ от Gemini"""
+        if not GEMINI_API_KEY:
+            logger.error("❌ GEMINI_API_KEY не установлен!")
+            return None
+            
         try:
             history_ctx = self.get_history_context(user_id)
             
@@ -109,35 +130,53 @@ class RAG:
 
 ═══════════════════════════════════════
 
-❓ ВОПРОС:
+❓ ВОПРОС ПОЛЬЗОВАТЕЛЯ:
 {question}
 
 ═══════════════════════════════════════
 
-🔥 ОТВЕТ (полный биологический алгоритм):"""
+🔥 ТВОЙ ОТВЕТ (полный биологический алгоритм):"""
 
-            model = genai.GenerativeModel('gemini-pro')
-            response = model.generate_content(prompt)
+            logger.info(f"📤 Запрос к Gemini от {user_id}: {question[:50]}...")
             
-            if not response.text:
+            model = genai.GenerativeModel('gemini-pro')
+            response = model.generate_content(prompt, timeout=30)
+            
+            if not response or not response.text:
+                logger.warning(f"⚠️ Пустой ответ от Gemini для {user_id}")
                 return None
             
             answer_text = response.text
+            
+            # Добавить в историю
             self.add_to_history(user_id, "user", question)
             self.add_to_history(user_id, "assistant", answer_text)
+            
+            # Увеличить счётчик
             self.user_manager.add_response(user_id)
             
+            logger.info(f"📥 Ответ получен для {user_id} ({len(answer_text)} символов)")
+            
             return answer_text
+            
         except Exception as e:
-            logger.error(f"Gemini ошибка: {e}")
+            logger.error(f"❌ Ошибка Gemini для {user_id}: {str(e)[:100]}")
             return None
 
 
+# Глобальный экземпляр RAG
 rag = RAG()
 
 
+# ════════════════════════════════════════════════════════════════
+# TELEGRAM HANDLERS
+# ════════════════════════════════════════════════════════════════
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /start - выбор подписки"""
     user_id = update.effective_user.id
+    logger.info(f"👤 /start от {user_id}")
+    
     user = rag.user_manager.get_user_data(user_id)
     
     keyboard = [
@@ -152,19 +191,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         remain = rag.user_manager.get_remaining(user_id)
         status = f"✅ Подписка: {user['subscription'].upper()}\n📊 Осталось: {remain}"
     else:
-        status = "❌ Нет подписки"
+        status = "❌ Нет активной подписки"
     
     await update.message.reply_text(
-        f"🔥 ВЫСШИЙ ИНТЕЛЛЕКТ (Gemini)\n\n{status}\n\n⚡ Выбери подписку:",
+        f"🔥 ВЫСШИЙ ИНТЕЛЛЕКТ\n\n{status}\n\n⚡ Выбери подписку:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
 async def handle_sub(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор подписки"""
     query = update.callback_query
     user_id = query.from_user.id
     
-    subs = {"sub_chushpan": "chushpan", "sub_goy": "goy", "sub_sigma": "sigma"}
+    subs = {
+        "sub_chushpan": "chushpan",
+        "sub_goy": "goy",
+        "sub_sigma": "sigma"
+    }
     sub_type = subs.get(query.data)
     if not sub_type:
         return
@@ -172,8 +216,9 @@ async def handle_sub(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sub_names = {"chushpan": "Чушпан", "goy": "Гой", "sigma": "Сигма"}
     
     await query.answer()
+    logger.info(f"📌 {user_id} выбрал {sub_type}")
     
-    keyboard = [[InlineKeyboardButton("🔗 Ссылка на видео", url=YOUTUBE_LINK)]]
+    keyboard = [[InlineKeyboardButton("🔗 Подтвердить подписку", url=YOUTUBE_LINK)]]
     await query.edit_message_text(
         text=f"📌 Подписка: {sub_names.get(sub_type)}\n\nНажми кнопку → вернись → /verify",
         reply_markup=InlineKeyboardMarkup(keyboard)
@@ -184,7 +229,9 @@ async def handle_sub(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Подтверждение подписки"""
     user_id = update.effective_user.id
+    logger.info(f"✓ /verify от {user_id}")
     
     if 'pending_sub' not in context.user_data:
         await update.message.reply_text("❌ Сначала выбери подписку: /start")
@@ -194,7 +241,7 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     verify_time = context.user_data.get('verify_time')
     
     if verify_time and (datetime.now() - verify_time).seconds > 600:
-        await update.message.reply_text("⏰ Время истекло. /start")
+        await update.message.reply_text("⏰ Время истекло. Начни заново: /start")
         context.user_data.pop('pending_sub', None)
         return
     
@@ -204,7 +251,10 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     limit = SUBSCRIPTION_LIMITS[sub_type]
     
     await update.message.reply_text(
-        f"✅ ПОДПИСКА АКТИВИРОВАНА! ✓\n\n🎯 {sub_names.get(sub_type)}\n📊 Ответов: {limit}\n\n🚀 Пиши вопросы!"
+        f"✅ ПОДПИСКА АКТИВИРОВАНА! ✓\n\n"
+        f"🎯 Тип: {sub_names.get(sub_type)}\n"
+        f"📊 Доступные ответы: {limit}\n\n"
+        f"🚀 Теперь ты можешь задавать вопросы!"
     )
     
     context.user_data.pop('pending_sub', None)
@@ -212,42 +262,57 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка вопросов"""
     user_id = update.effective_user.id
     question = update.message.text
     
+    logger.info(f"💬 Вопрос от {user_id}: {question[:50]}...")
+    
+    # Проверка подписки
     if not rag.user_manager.get_user_data(user_id).get("subscription"):
-        await update.message.reply_text("❌ Нет подписки! /start")
+        await update.message.reply_text("❌ У тебя нет подписки!\n\nВыбери план: /start")
         return
     
+    # Проверка лимита
     if not rag.user_manager.can_use_response(user_id):
         user = rag.user_manager.get_user_data(user_id)
         limit = SUBSCRIPTION_LIMITS.get(user["subscription"], 0)
-        await update.message.reply_text(f"📊 Лимит исчерпан: {limit}/{limit}\n\n/start")
+        await update.message.reply_text(
+            f"📊 Лимит исчерпан!\n\n"
+            f"Использовано: {limit}/{limit}\n\n"
+            f"Обновить подписку: /start"
+        )
         return
     
-    logger.info(f"[{user_id}] {question}")
+    # Показать "печать"
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
+    # Получить ответ
     answer = rag.answer_gemini(question, user_id)
     
     if answer is None:
-        await update.message.reply_text("⚠️ Ошибка. Попробуй ещё раз.")
+        await update.message.reply_text("⚠️ Ошибка при получении ответа. Попробуй ещё раз.")
         return
     
     remain = rag.user_manager.get_remaining(user_id)
     
     await update.message.reply_text(
-        f"{answer}\n\n━━━━━━━━━━━━\n📊 Осталось: {remain}"
+        f"{answer}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 Осталось ответов: {remain}"
     )
 
 
 async def clear_hist(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Очистить историю"""
     user_id = update.effective_user.id
     rag.conversation_history[user_id] = []
-    await update.message.reply_text("🗑️ История очищена")
+    logger.info(f"🗑️ История очищена для {user_id}")
+    await update.message.reply_text("🗑️ История диалога очищена")
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Статистика"""
     user_id = update.effective_user.id
     user = rag.user_manager.get_user_data(user_id)
     
@@ -255,45 +320,65 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         limit = SUBSCRIPTION_LIMITS.get(user["subscription"], 0)
         used = user["responses_used"]
         remain = max(0, limit - used)
-        info = f"✅ Подписка: {user['subscription'].upper()}\n📊 Использовано: {used}/{limit}\n📈 Осталось: {remain}"
+        info = (
+            f"✅ Подписка: {user['subscription'].upper()}\n"
+            f"📊 Использовано: {used}/{limit}\n"
+            f"📈 Осталось: {remain}"
+        )
     else:
         info = "❌ Подписка не активна"
     
     await update.message.reply_text(
-        f"🧠 СТАТИСТИКА:\n\n{info}\n\n🚀 Gemini Pro API\n☁️ Railway\n\n⚙️ Ассоциативный синтез"
+        f"🧠 СТАТИСТИКА:\n\n{info}\n\n"
+        f"🚀 Gemini Pro API\n"
+        f"☁️ Railway 24/7\n"
+        f"⚙️ Ассоциативный синтез"
     )
 
 
+# ════════════════════════════════════════════════════════════════
+# ГЛАВНЫЙ ЗАПУСК
+# ════════════════════════════════════════════════════════════════
+
+async def main():
+    """Главная функция запуска"""
+    if not TELEGRAM_TOKEN:
+        logger.critical("❌ ОШИБКА: TELEGRAM_TOKEN не установлен в Railway!")
+        return
+    
+    logger.info("✅ Создаю Application...")
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    
+    # Регистрация handlers
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("verify", verify))
+    app.add_handler(CommandHandler("clear_history", clear_hist))
+    app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CallbackQueryHandler(handle_sub))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_msg))
+    
+    logger.info("=" * 60)
+    logger.info("✅ БОТ ПОЛНОСТЬЮ ГОТОВ К РАБОТЕ!")
+    logger.info("=" * 60)
+    logger.info("📱 Найди бота в Telegram")
+    logger.info("🔥 API: Gemini Pro")
+    logger.info("☁️ Хостинг: Railway 24/7")
+    logger.info("\n Доступные команды:")
+    logger.info(" /start - выбрать подписку")
+    logger.info(" /verify - подтвердить подписку")
+    logger.info(" /stats - статистика")
+    logger.info(" /clear_history - очистить историю")
+    logger.info("=" * 60)
+    
+    # Запуск polling
+    await app.run_polling()
+
+
 if __name__ == "__main__":
-    print("\n" + "=" * 60)
-    print("🔥 ВЫСШИЙ ИНТЕЛЛЕКТ (Gemini + Railway)")
-    print("=" * 60)
-    
+    import asyncio
     try:
-        app = Application.builder().token(TELEGRAM_TOKEN).build()
-        
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("verify", verify))
-        app.add_handler(CommandHandler("clear_history", clear_hist))
-        app.add_handler(CommandHandler("stats", stats))
-        app.add_handler(CallbackQueryHandler(handle_sub))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_msg))
-        
-        print("✅ БОТ ГОТОВ!")
-        print("📱 Telegram: найди бота")
-        print("🔥 API: Gemini Pro")
-        print("☁️ Хостинг: Railway 24/7")
-        print("\n Команды:")
-        print(" /start - подписка")
-        print(" /verify - активировать")
-        print(" /stats - статистика")
-        print(" /clear_history - очистить историю")
-        print("=" * 60 + "\n")
-        
-        app.run_polling()
-    
+        asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n\n👋 БОТ ВЫКЛЮЧЕН")
+        logger.info("\n👋 БОТ ВЫКЛЮЧЕН ПОЛЬЗОВАТЕЛЕМ")
     except Exception as e:
-        print(f"\n❌ ОШИБКА: {e}")
-        traceback.print_exc()
+        logger.critical(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
