@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from collections import defaultdict
 from datetime import datetime
 import google.generativeai as genai
@@ -12,22 +13,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ════════════════════════════════════════════════════════════════
-# ПЕРЕМЕННЫЕ ИЗ RAILWAY DASHBOARD
-# ════════════════════════════════════════════════════════════════
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-logger.info("=" * 60)
+logger.info("=" * 70)
 logger.info("🔥 ИНИЦИАЛИЗАЦИЯ ВЫСШЕГО ИНТЕЛЛЕКТА")
-logger.info("=" * 60)
-logger.info(f"Telegram Token: {'✅' if TELEGRAM_TOKEN else '❌ ОТСУТСТВУЕТ'}")
-logger.info(f"Gemini API Key: {'✅' if GEMINI_API_KEY else '❌ ОТСУТСТВУЕТ'}")
+logger.info("=" * 70)
+logger.info(f"✓ Telegram Token длина: {len(TELEGRAM_TOKEN)} символов")
+logger.info(f"✓ Gemini API Key длина: {len(GEMINI_API_KEY)} символов")
 
-if GEMINI_API_KEY:
+if GEMINI_API_KEY and len(GEMINI_API_KEY) > 10:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        logger.info("✅ Gemini API сконфигурирован")
+        logger.info("✅ Gemini API сконфигурирован успешно")
     except Exception as e:
         logger.error(f"⚠️ Ошибка Gemini: {e}")
 
@@ -43,8 +41,6 @@ USERS = {}
 
 
 class UserManager:
-    """Управление пользователями и подписками"""
-    
     def __init__(self):
         self.users = USERS
     
@@ -90,15 +86,12 @@ class UserManager:
 
 
 class RAG:
-    """RAG система с Gemini API"""
-    
     def __init__(self):
         self.conversation_history = defaultdict(list)
         self.max_history = 25
         self.user_manager = UserManager()
 
     def get_history_context(self, user_id):
-        """Получить контекст из истории"""
         if not self.conversation_history[user_id]:
             return ""
         text = "КОНТЕКСТ ДИАЛОГА:\n"
@@ -110,15 +103,13 @@ class RAG:
         return text
 
     def add_to_history(self, user_id, role, text):
-        """Добавить в историю"""
         self.conversation_history[user_id].append({"role": role, "text": text})
         if len(self.conversation_history[user_id]) > self.max_history:
             self.conversation_history[user_id] = self.conversation_history[user_id][-self.max_history:]
 
     def answer_gemini(self, question, user_id):
-        """Получить ответ от Gemini"""
-        if not GEMINI_API_KEY:
-            logger.error("❌ GEMINI_API_KEY не установлен!")
+        if not GEMINI_API_KEY or len(GEMINI_API_KEY) < 10:
+            logger.error("❌ GEMINI_API_KEY не установлен или слишком короткий!")
             return None
             
         try:
@@ -148,11 +139,9 @@ class RAG:
             
             answer_text = response.text
             
-            # Добавить в историю
             self.add_to_history(user_id, "user", question)
             self.add_to_history(user_id, "assistant", answer_text)
             
-            # Увеличить счётчик
             self.user_manager.add_response(user_id)
             
             logger.info(f"📥 Ответ получен для {user_id} ({len(answer_text)} символов)")
@@ -164,16 +153,10 @@ class RAG:
             return None
 
 
-# Глобальный экземпляр RAG
 rag = RAG()
 
 
-# ════════════════════════════════════════════════════════════════
-# TELEGRAM HANDLERS
-# ════════════════════════════════════════════════════════════════
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /start - выбор подписки"""
     user_id = update.effective_user.id
     logger.info(f"👤 /start от {user_id}")
     
@@ -200,7 +183,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_sub(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выбор подписки"""
     query = update.callback_query
     user_id = query.from_user.id
     
@@ -229,7 +211,6 @@ async def handle_sub(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Подтверждение подписки"""
     user_id = update.effective_user.id
     logger.info(f"✓ /verify от {user_id}")
     
@@ -262,18 +243,15 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка вопросов"""
     user_id = update.effective_user.id
     question = update.message.text
     
     logger.info(f"💬 Вопрос от {user_id}: {question[:50]}...")
     
-    # Проверка подписки
     if not rag.user_manager.get_user_data(user_id).get("subscription"):
         await update.message.reply_text("❌ У тебя нет подписки!\n\nВыбери план: /start")
         return
     
-    # Проверка лимита
     if not rag.user_manager.can_use_response(user_id):
         user = rag.user_manager.get_user_data(user_id)
         limit = SUBSCRIPTION_LIMITS.get(user["subscription"], 0)
@@ -284,10 +262,8 @@ async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # Показать "печать"
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
-    # Получить ответ
     answer = rag.answer_gemini(question, user_id)
     
     if answer is None:
@@ -304,7 +280,6 @@ async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def clear_hist(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Очистить историю"""
     user_id = update.effective_user.id
     rag.conversation_history[user_id] = []
     logger.info(f"🗑️ История очищена для {user_id}")
@@ -312,7 +287,6 @@ async def clear_hist(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Статистика"""
     user_id = update.effective_user.id
     user = rag.user_manager.get_user_data(user_id)
     
@@ -336,20 +310,29 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# ════════════════════════════════════════════════════════════════
-# ГЛАВНЫЙ ЗАПУСК
-# ════════════════════════════════════════════════════════════════
-
 async def main():
-    """Главная функция запуска"""
-    if not TELEGRAM_TOKEN:
-        logger.critical("❌ ОШИБКА: TELEGRAM_TOKEN не установлен в Railway!")
-        return
+    """Главная функция запуска - БЕСКОНЕЧНО РАБОТАЕТ!"""
     
+    # Проверка переменных
+    if not TELEGRAM_TOKEN or len(TELEGRAM_TOKEN) < 20:
+        logger.critical("❌ ОШИБКА: TELEGRAM_TOKEN НЕ УСТАНОВЛЕН или СЛИШКОМ КОРОТКИЙ!")
+        logger.critical(f"📊 Длина токена: {len(TELEGRAM_TOKEN)} символов")
+        logger.info("⏳ Жду 30 сек и перезапускаюсь...")
+        await asyncio.sleep(30)
+        return await main()  # РЕКУРСИЯ - перезапуск!
+    
+    if not GEMINI_API_KEY or len(GEMINI_API_KEY) < 20:
+        logger.critical("❌ ОШИБКА: GEMINI_API_KEY НЕ УСТАНОВЛЕН или СЛИШКОМ КОРОТКИЙ!")
+        logger.critical(f"📊 Длина ключа: {len(GEMINI_API_KEY)} символов")
+        logger.info("⏳ Жду 30 сек и перезапускаюсь...")
+        await asyncio.sleep(30)
+        return await main()  # РЕКУРСИЯ - перезапуск!
+    
+    logger.info("✅ ВСЕ ПЕРЕМЕННЫЕ УСТАНОВЛЕНЫ УСПЕШНО!")
     logger.info("✅ Создаю Application...")
+    
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     
-    # Регистрация handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("verify", verify))
     app.add_handler(CommandHandler("clear_history", clear_hist))
@@ -357,25 +340,24 @@ async def main():
     app.add_handler(CallbackQueryHandler(handle_sub))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_msg))
     
-    logger.info("=" * 60)
+    logger.info("=" * 70)
     logger.info("✅ БОТ ПОЛНОСТЬЮ ГОТОВ К РАБОТЕ!")
-    logger.info("=" * 60)
+    logger.info("=" * 70)
     logger.info("📱 Найди бота в Telegram")
     logger.info("🔥 API: Gemini Pro")
     logger.info("☁️ Хостинг: Railway 24/7")
-    logger.info("\n Доступные команды:")
+    logger.info("\n 🎯 Доступные команды:")
     logger.info(" /start - выбрать подписку")
     logger.info(" /verify - подтвердить подписку")
     logger.info(" /stats - статистика")
     logger.info(" /clear_history - очистить историю")
-    logger.info("=" * 60)
+    logger.info("=" * 70 + "\n")
     
-    # Запуск polling
-    await app.run_polling()
+    # БЕСКОНЕЧНЫЙ POLLING - БОТ НИКОГДА НЕ ВЫКЛЮЧИТСЯ!
+    await app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
-    import asyncio
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
