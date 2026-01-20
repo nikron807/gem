@@ -14,10 +14,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════
-# ПЕРЕМЕННЫЕ ИЗ RAILWAY
+# ПЕРЕМЕННЫЕ ИЗ RAILWAY - ИСПРАВЛЕНО!
 # ═══════════════════════════════════════════════════════════════
+
+# Способ 1: Прямой os.environ (для Railway)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+
+# DEBUG - выводим что читаем
+print(f"\n🔍 DEBUG ПЕРЕМЕННЫЕ:")
+print(f"   TELEGRAM_TOKEN из environ: {len(TELEGRAM_TOKEN)} символов")
+print(f"   GEMINI_API_KEY из environ: {len(GEMINI_API_KEY)} символов")
+print(f"   TELEGRAM_TOKEN значение: {TELEGRAM_TOKEN[:20] if TELEGRAM_TOKEN else 'EMPTY'}")
+print(f"   GEMINI_API_KEY значение: {GEMINI_API_KEY[:20] if GEMINI_API_KEY else 'EMPTY'}\n")
 
 logger.info("=" * 70)
 logger.info("🔥 ИНИЦИАЛИЗАЦИЯ ВЫСШЕГО ИНТЕЛЛЕКТА")
@@ -313,24 +322,19 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# ═══════════════════════════════════════════════════════════════
-# ГЛАВНАЯ ФУНКЦИЯ - ИСПРАВЛЕНО!
-# ═══════════════════════════════════════════════════════════════
-
 async def main():
     """Главная функция запуска"""
     
-    # ПРОВЕРКА - если токены не пришли, падаем с ошибкой
     if not TELEGRAM_TOKEN or len(TELEGRAM_TOKEN) < 20:
         logger.critical("❌ ОШИБКА: TELEGRAM_TOKEN НЕ УСТАНОВЛЕН в Railway!")
         logger.critical(f"📊 Длина токена: {len(TELEGRAM_TOKEN)} символов")
-        logger.critical("🔧 Действие: Railway → Variables → добавь TELEGRAM_TOKEN")
+        logger.critical("🔧 Действие: Railway → Service → Variables → добавь TELEGRAM_TOKEN")
         return
     
     if not GEMINI_API_KEY or len(GEMINI_API_KEY) < 20:
         logger.critical("❌ ОШИБКА: GEMINI_API_KEY НЕ УСТАНОВЛЕН в Railway!")
         logger.critical(f"📊 Длина ключа: {len(GEMINI_API_KEY)} символов")
-        logger.critical("🔧 Действие: Railway → Variables → добавь GEMINI_API_KEY")
+        logger.critical("🔧 Действие: Railway → Service → Variables → добавь GEMINI_API_KEY")
         return
     
     logger.info("✅ ВСЕ ПЕРЕМЕННЫЕ УСТАНОВЛЕНЫ УСПЕШНО!")
@@ -358,14 +362,8 @@ async def main():
     logger.info(" /clear_history - очистить историю")
     logger.info("=" * 70 + "\n")
     
-    # ГЛАВНОЕ ИСПРАВЛЕНИЕ: БЕЗ РЕКУРСИИ - просто run_polling
-    # run_polling = бесконечный цикл, он сам не упадет
     await app.run_polling(drop_pending_updates=True)
 
-
-# ═══════════════════════════════════════════════════════════════
-# ТОЧКА ВХОДА - БЕЗ РЕКУРСИИ!
-# ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     try:
