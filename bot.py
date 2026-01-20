@@ -13,8 +13,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+# ═══════════════════════════════════════════════════════════════
+# ПЕРЕМЕННЫЕ - С FALLBACK BACKUP!
+# ═══════════════════════════════════════════════════════════════
+
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN") or os.getenv("TELEGRAM_TOKEN") or ""
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") or ""
+
+# BACKUP - если Railway не передал
+if not TELEGRAM_TOKEN or len(TELEGRAM_TOKEN) < 20:
+    TELEGRAM_TOKEN = "8478495663:AAFJ31yzb5qU2jBAi1VMd1ui92_DAV576s4"
+    logger.warning("⚠️ ИСПОЛЬЗУЕТСЯ BACKUP TELEGRAM_TOKEN! Проверь Railway Variables!")
+
+if not GEMINI_API_KEY or len(GEMINI_API_KEY) < 20:
+    GEMINI_API_KEY = "AlzaSyC5p|Vzbe5NqusOM2iFxwqP4Nq5ILia6ZA"
+    logger.warning("⚠️ ИСПОЛЬЗУЕТСЯ BACKUP GEMINI_API_KEY! Проверь Railway Variables!")
 
 logger.info("=" * 70)
 logger.info("🔥 ИНИЦИАЛИЗАЦИЯ ВЫСШЕГО ИНТЕЛЛЕКТА")
@@ -313,22 +326,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def main():
     """Главная функция запуска - БЕСКОНЕЧНО РАБОТАЕТ!"""
     
-    # Проверка переменных
-    if not TELEGRAM_TOKEN or len(TELEGRAM_TOKEN) < 20:
-        logger.critical("❌ ОШИБКА: TELEGRAM_TOKEN НЕ УСТАНОВЛЕН или СЛИШКОМ КОРОТКИЙ!")
-        logger.critical(f"📊 Длина токена: {len(TELEGRAM_TOKEN)} символов")
-        logger.info("⏳ Жду 30 сек и перезапускаюсь...")
-        await asyncio.sleep(30)
-        return await main()  # РЕКУРСИЯ - перезапуск!
-    
-    if not GEMINI_API_KEY or len(GEMINI_API_KEY) < 20:
-        logger.critical("❌ ОШИБКА: GEMINI_API_KEY НЕ УСТАНОВЛЕН или СЛИШКОМ КОРОТКИЙ!")
-        logger.critical(f"📊 Длина ключа: {len(GEMINI_API_KEY)} символов")
-        logger.info("⏳ Жду 30 сек и перезапускаюсь...")
-        await asyncio.sleep(30)
-        return await main()  # РЕКУРСИЯ - перезапуск!
-    
-    logger.info("✅ ВСЕ ПЕРЕМЕННЫЕ УСТАНОВЛЕНЫ УСПЕШНО!")
+    logger.info("✅ ВСЕ ПЕРЕМЕННЫЕ ГОТОВЫ!")
     logger.info("✅ Создаю Application...")
     
     app = Application.builder().token(TELEGRAM_TOKEN).build()
