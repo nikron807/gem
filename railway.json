@@ -4,6 +4,6 @@
     "builder": "nixpacks"
   },
   "deploy": {
-    "startCommand": "python mv bot_final.py"
+    "startCommand": "python bot.py"
   }
 }
