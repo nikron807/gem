@@ -14,20 +14,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════
-# ПЕРЕМЕННЫЕ - С FALLBACK BACKUP!
+# ПЕРЕМЕННЫЕ ИЗ RAILWAY
 # ═══════════════════════════════════════════════════════════════
-
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN") or os.getenv("TELEGRAM_TOKEN") or ""
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") or ""
-
-# BACKUP - если Railway не передал
-if not TELEGRAM_TOKEN or len(TELEGRAM_TOKEN) < 20:
-    TELEGRAM_TOKEN = "8478495663:AAFJ31yzb5qU2jBAi1VMd1ui92_DAV576s4"
-    logger.warning("⚠️ ИСПОЛЬЗУЕТСЯ BACKUP TELEGRAM_TOKEN! Проверь Railway Variables!")
-
-if not GEMINI_API_KEY or len(GEMINI_API_KEY) < 20:
-    GEMINI_API_KEY = "AlzaSyC5p|Vzbe5NqusOM2iFxwqP4Nq5ILia6ZA"
-    logger.warning("⚠️ ИСПОЛЬЗУЕТСЯ BACKUP GEMINI_API_KEY! Проверь Railway Variables!")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 logger.info("=" * 70)
 logger.info("🔥 ИНИЦИАЛИЗАЦИЯ ВЫСШЕГО ИНТЕЛЛЕКТА")
@@ -323,10 +313,27 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# ═══════════════════════════════════════════════════════════════
+# ГЛАВНАЯ ФУНКЦИЯ - ИСПРАВЛЕНО!
+# ═══════════════════════════════════════════════════════════════
+
 async def main():
-    """Главная функция запуска - БЕСКОНЕЧНО РАБОТАЕТ!"""
+    """Главная функция запуска"""
     
-    logger.info("✅ ВСЕ ПЕРЕМЕННЫЕ ГОТОВЫ!")
+    # ПРОВЕРКА - если токены не пришли, падаем с ошибкой
+    if not TELEGRAM_TOKEN or len(TELEGRAM_TOKEN) < 20:
+        logger.critical("❌ ОШИБКА: TELEGRAM_TOKEN НЕ УСТАНОВЛЕН в Railway!")
+        logger.critical(f"📊 Длина токена: {len(TELEGRAM_TOKEN)} символов")
+        logger.critical("🔧 Действие: Railway → Variables → добавь TELEGRAM_TOKEN")
+        return
+    
+    if not GEMINI_API_KEY or len(GEMINI_API_KEY) < 20:
+        logger.critical("❌ ОШИБКА: GEMINI_API_KEY НЕ УСТАНОВЛЕН в Railway!")
+        logger.critical(f"📊 Длина ключа: {len(GEMINI_API_KEY)} символов")
+        logger.critical("🔧 Действие: Railway → Variables → добавь GEMINI_API_KEY")
+        return
+    
+    logger.info("✅ ВСЕ ПЕРЕМЕННЫЕ УСТАНОВЛЕНЫ УСПЕШНО!")
     logger.info("✅ Создаю Application...")
     
     app = Application.builder().token(TELEGRAM_TOKEN).build()
@@ -344,16 +351,21 @@ async def main():
     logger.info("📱 Найди бота в Telegram")
     logger.info("🔥 API: Gemini Pro")
     logger.info("☁️ Хостинг: Railway 24/7")
-    logger.info("\n 🎯 Доступные команды:")
+    logger.info("🎯 Доступные команды:")
     logger.info(" /start - выбрать подписку")
     logger.info(" /verify - подтвердить подписку")
     logger.info(" /stats - статистика")
     logger.info(" /clear_history - очистить историю")
     logger.info("=" * 70 + "\n")
     
-    # БЕСКОНЕЧНЫЙ POLLING - БОТ НИКОГДА НЕ ВЫКЛЮЧИТСЯ!
+    # ГЛАВНОЕ ИСПРАВЛЕНИЕ: БЕЗ РЕКУРСИИ - просто run_polling
+    # run_polling = бесконечный цикл, он сам не упадет
     await app.run_polling(drop_pending_updates=True)
 
+
+# ═══════════════════════════════════════════════════════════════
+# ТОЧКА ВХОДА - БЕЗ РЕКУРСИИ!
+# ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     try:
