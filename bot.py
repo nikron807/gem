@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 import asyncio
 from collections import defaultdict
@@ -14,19 +15,30 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════
-# ПЕРЕМЕННЫЕ ИЗ RAILWAY - ИСПРАВЛЕНО!
+# ПЕРЕМЕННЫЕ ИЗ RAILWAY (ИСПРАВЛЕНО!)
 # ═══════════════════════════════════════════════════════════════
 
-# Способ 1: Прямой os.environ (для Railway)
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN") or ""
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or ""
 
-# DEBUG - выводим что читаем
-print(f"\n🔍 DEBUG ПЕРЕМЕННЫЕ:")
-print(f"   TELEGRAM_TOKEN из environ: {len(TELEGRAM_TOKEN)} символов")
-print(f"   GEMINI_API_KEY из environ: {len(GEMINI_API_KEY)} символов")
-print(f"   TELEGRAM_TOKEN значение: {TELEGRAM_TOKEN[:20] if TELEGRAM_TOKEN else 'EMPTY'}")
-print(f"   GEMINI_API_KEY значение: {GEMINI_API_KEY[:20] if GEMINI_API_KEY else 'EMPTY'}\n")
+# DEBUG - выводим что читаем (с flush для Railway)
+print(f"\n{'='*70}", flush=True)
+print(f"🔍 DEBUG: ПЕРЕМЕННЫЕ ИЗ RAILWAY", flush=True)
+print(f"{'='*70}", flush=True)
+print(f"TELEGRAM_TOKEN: {len(TELEGRAM_TOKEN)} символов", flush=True)
+print(f"GEMINI_API_KEY: {len(GEMINI_API_KEY)} символов", flush=True)
+
+if TELEGRAM_TOKEN:
+    print(f"✓ TELEGRAM_TOKEN найден: {TELEGRAM_TOKEN[:15]}...", flush=True)
+else:
+    print(f"❌ TELEGRAM_TOKEN НЕ НАЙДЕН! Проверь Railway Variables!", flush=True)
+
+if GEMINI_API_KEY:
+    print(f"✓ GEMINI_API_KEY найден: {GEMINI_API_KEY[:15]}...", flush=True)
+else:
+    print(f"❌ GEMINI_API_KEY НЕ НАЙДЕН! Проверь Railway Variables!", flush=True)
+
+print(f"{'='*70}\n", flush=True)
 
 logger.info("=" * 70)
 logger.info("🔥 ИНИЦИАЛИЗАЦИЯ ВЫСШЕГО ИНТЕЛЛЕКТА")
@@ -322,9 +334,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# ═══════════════════════════════════════════════════════════════
+# ГЛАВНАЯ ФУНКЦИЯ
+# ═══════════════════════════════════════════════════════════════
+
 async def main():
     """Главная функция запуска"""
     
+    # ПРОВЕРКА ТОКЕНОВ
     if not TELEGRAM_TOKEN or len(TELEGRAM_TOKEN) < 20:
         logger.critical("❌ ОШИБКА: TELEGRAM_TOKEN НЕ УСТАНОВЛЕН в Railway!")
         logger.critical(f"📊 Длина токена: {len(TELEGRAM_TOKEN)} символов")
@@ -364,6 +381,10 @@ async def main():
     
     await app.run_polling(drop_pending_updates=True)
 
+
+# ═══════════════════════════════════════════════════════════════
+# ТОЧКА ВХОДА
+# ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     try:
