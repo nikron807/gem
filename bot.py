@@ -15,25 +15,25 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════
-# ПЕРЕМЕННЫЕ ИЗ RAILWAY (ИСПРАВЛЕНО!)
+# ПЕРЕМЕННЫЕ ИЗ RAILWAY
 # ═══════════════════════════════════════════════════════════════
 
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN") or ""
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or ""
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "").strip()
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 
-# DEBUG - выводим что читаем (с flush для Railway)
+# DEBUG
 print(f"\n{'='*70}", flush=True)
 print(f"🔍 DEBUG: ПЕРЕМЕННЫЕ ИЗ RAILWAY", flush=True)
 print(f"{'='*70}", flush=True)
 print(f"TELEGRAM_TOKEN: {len(TELEGRAM_TOKEN)} символов", flush=True)
 print(f"GEMINI_API_KEY: {len(GEMINI_API_KEY)} символов", flush=True)
 
-if TELEGRAM_TOKEN:
+if TELEGRAM_TOKEN and len(TELEGRAM_TOKEN) > 20:
     print(f"✓ TELEGRAM_TOKEN найден: {TELEGRAM_TOKEN[:15]}...", flush=True)
 else:
     print(f"❌ TELEGRAM_TOKEN НЕ НАЙДЕН! Проверь Railway Variables!", flush=True)
 
-if GEMINI_API_KEY:
+if GEMINI_API_KEY and len(GEMINI_API_KEY) > 20:
     print(f"✓ GEMINI_API_KEY найден: {GEMINI_API_KEY[:15]}...", flush=True)
 else:
     print(f"❌ GEMINI_API_KEY НЕ НАЙДЕН! Проверь Railway Variables!", flush=True)
@@ -46,7 +46,7 @@ logger.info("=" * 70)
 logger.info(f"✓ Telegram Token длина: {len(TELEGRAM_TOKEN)} символов")
 logger.info(f"✓ Gemini API Key длина: {len(GEMINI_API_KEY)} символов")
 
-if GEMINI_API_KEY and len(GEMINI_API_KEY) > 10:
+if GEMINI_API_KEY and len(GEMINI_API_KEY) > 20:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         logger.info("✅ Gemini API сконфигурирован успешно")
@@ -132,7 +132,7 @@ class RAG:
             self.conversation_history[user_id] = self.conversation_history[user_id][-self.max_history:]
 
     def answer_gemini(self, question, user_id):
-        if not GEMINI_API_KEY or len(GEMINI_API_KEY) < 10:
+        if not GEMINI_API_KEY or len(GEMINI_API_KEY) < 20:
             logger.error("❌ GEMINI_API_KEY не установлен или слишком короткий!")
             return None
             
@@ -334,25 +334,20 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# ═══════════════════════════════════════════════════════════════
-# ГЛАВНАЯ ФУНКЦИЯ
-# ═══════════════════════════════════════════════════════════════
-
 async def main():
     """Главная функция запуска"""
     
-    # ПРОВЕРКА ТОКЕНОВ
     if not TELEGRAM_TOKEN or len(TELEGRAM_TOKEN) < 20:
         logger.critical("❌ ОШИБКА: TELEGRAM_TOKEN НЕ УСТАНОВЛЕН в Railway!")
         logger.critical(f"📊 Длина токена: {len(TELEGRAM_TOKEN)} символов")
         logger.critical("🔧 Действие: Railway → Service → Variables → добавь TELEGRAM_TOKEN")
-        return
+        sys.exit(1)
     
     if not GEMINI_API_KEY or len(GEMINI_API_KEY) < 20:
         logger.critical("❌ ОШИБКА: GEMINI_API_KEY НЕ УСТАНОВЛЕН в Railway!")
         logger.critical(f"📊 Длина ключа: {len(GEMINI_API_KEY)} символов")
         logger.critical("🔧 Действие: Railway → Service → Variables → добавь GEMINI_API_KEY")
-        return
+        sys.exit(1)
     
     logger.info("✅ ВСЕ ПЕРЕМЕННЫЕ УСТАНОВЛЕНЫ УСПЕШНО!")
     logger.info("✅ Создаю Application...")
@@ -381,10 +376,6 @@ async def main():
     
     await app.run_polling(drop_pending_updates=True)
 
-
-# ═══════════════════════════════════════════════════════════════
-# ТОЧКА ВХОДА
-# ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     try:
